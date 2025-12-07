@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOLOv5 Real-time Detection</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .video-section {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .video-container {
+            position: relative;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #000;
+        }
+        
+        .video-stream {
+            width: 100%;
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        .stats-section {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .stats-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .status {
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+        
+        .status.running {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.stopped {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .fps-display {
+            background: linear-gradient(45deg, #00c851, #007e33);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .fps-current {
+            font-size: 2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .fps-avg {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-start {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-start:hover {
+            background: #218838;
+            transform: translateY(-2px);
+        }
+        
+        .btn-stop {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .btn-stop:hover {
+            background: #c82333;
+            transform: translateY(-2px);
+        }
+        
+        .detections-info {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .detection-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .detection-item:last-child {
+            border-bottom: none;
+        }
+        
+        .detection-class {
+            font-weight: bold;
+            color: #495057;
+        }
+        
+        .detection-confidence {
+            background: #007bff;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.8em;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .stat-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #007bff;
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+        
+        .detection-stats {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .detection-stats h4 {
+            margin-bottom: 10px;
+            color: #495057;
+        }
+        
+        .chart-container {
+            height: 200px;
+            background: white;
+            border-radius: 10px;
+            margin-top: 20px;
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6c757d;
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 YOLOv5 Real-time Detection</h1>
+            <p>Live video processing with object detection and FPS monitoring</p>
+        </div>
+        
+        <div class="main-content">
+            <div class="video-section">
+                <div class="video-container">
+                    <img src="{{ url_for('video_feed') }}" class="video-stream" alt="Video Stream">
+                </div>
+            </div>
+            
+            <div class="stats-section">
+                <div class="stats-header">
+                    <h3>📊 Live Statistics</h3>
+                    <div class="status" id="status">Loading...</div>
+                </div>
+                
+                <div class="fps-display">
+                    <div class="fps-current" id="fps-current">0</div>
+                    <div class="fps-avg">Avg: <span id="fps-avg">0</span> FPS</div>
+                </div>
+                
+                <div class="controls">
+                    <button class="btn btn-start" onclick="startProcessing()">▶️ Start</button>
+                    <button class="btn btn-stop" onclick="stopProcessing()">⏹️ Stop</button>
+                </div>
+                
+                <div class="detections-info">
+                    <h4>🔍 Current Detections</h4>
+                    <div id="current-detections">No detections</div>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="frame-count">0</div>
+                        <div class="stat-label">Frames Processed</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="detections-count">0</div>
+                        <div class="stat-label">Objects Detected</div>
+                    </div>
+                </div>
+                
+                <div class="detection-stats">
+                    <h4>📈 Detection Summary</h4>
+                    <div id="detection-summary">No data available</div>
+                </div>
+                
+                <div class="chart-container">
+                    <div>FPS Chart (Coming Soon)</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let statsInterval;
+        
+        function updateStats() {
+            fetch('/api/stats')
+                .then(response => response.json())
+                .then(data => {
+                    // Update FPS
+                    document.getElementById('fps-current').textContent = data.fps;
+                    document.getElementById('fps-avg').textContent = data.avg_fps;
+                    
+                    // Update status
+                    const statusEl = document.getElementById('status');
+                    statusEl.textContent = data.status.charAt(0).toUpperCase() + data.status.slice(1);
+                    statusEl.className = 'status ' + data.status;
+                    
+                    // Update counters
+                    document.getElementById('frame-count').textContent = data.frame_count.toLocaleString();
+                    document.getElementById('detections-count').textContent = data.detections_count;
+                    
+                    // Update current detections
+                    const detectionsEl = document.getElementById('current-detections');
+                    if (data.detections && data.detections.length > 0) {
+                        detectionsEl.innerHTML = data.detections.map(det => 
+                            `<div class="detection-item">
+                                <span class="detection-class">${det.class}</span>
+                                <span class="detection-confidence">${(det.confidence * 100).toFixed(1)}%</span>
+                            </div>`
+                        ).join('');
+                    } else {
+                        detectionsEl.innerHTML = '<div style="text-align: center; color: #6c757d;">No detections</div>';
+                    }
+                    
+                    // Update detection summary
+                    const summaryEl = document.getElementById('detection-summary');
+                    if (data.detection_stats && Object.keys(data.detection_stats).length > 0) {
+                        const total = Object.values(data.detection_stats).reduce((a, b) => a + b, 0);
+                        summaryEl.innerHTML = Object.entries(data.detection_stats)
+                            .sort((a, b) => b[1] - a[1])
+                            .map(([cls, count]) => {
+                                const percent = ((count / total) * 100).toFixed(1);
+                                return `<div class="detection-item">
+                                    <span>${cls}</span>
+                                    <span>${count} (${percent}%)</span>
+                                </div>`;
+                            }).join('');
+                    } else {
+                        summaryEl.innerHTML = '<div style="text-align: center; color: #6c757d;">No data available</div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching stats:', error);
+                });
+        }
+        
+        function startProcessing() {
+            fetch('/api/start')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'started' && !statsInterval) {
+                        statsInterval = setInterval(updateStats, 1000);
+                    }
+                });
+        }
+        
+        function stopProcessing() {
+            fetch('/api/stop')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'stopped' && statsInterval) {
+                        clearInterval(statsInterval);
+                        statsInterval = null;
+                    }
+                });
+        }
+        
+        // Start updating stats when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            updateStats();
+            statsInterval = setInterval(updateStats, 1000);
+        });
+        
+        // Handle page visibility to pause/resume updates
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                if (statsInterval) {
+                    clearInterval(statsInterval);
+                    statsInterval = null;
+                }
+            } else {
+                if (!statsInterval) {
+                    statsInterval = setInterval(updateStats, 1000);
+                }
+            }
+        });
+    </script>
+</body>
+</html>
